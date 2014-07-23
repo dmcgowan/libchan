@@ -22,8 +22,8 @@ func (s *Transport) encodeChannel(v reflect.Value) ([]byte, error) {
 	}
 
 	// Get stream identifier?
-	streamID := rc.stream.Identifier()
-	var buf [9]byte
+	referenceID := rc.referenceID
+	buf := make([]byte, 9)
 	if rc.direction == inbound {
 		buf[0] = 0x02 // Reverse direction
 	} else if rc.direction == outbound {
@@ -31,11 +31,8 @@ func (s *Transport) encodeChannel(v reflect.Value) ([]byte, error) {
 	} else {
 		return nil, errors.New("invalid direction")
 	}
-	written := binary.PutUvarint(buf[1:], uint64(streamID))
-	if written > 4 {
-		return nil, errors.New("wrote unexpected stream id size")
-	}
-	return buf[:(written + 1)], nil
+	binary.BigEndian.PutUint64(buf[1:], referenceID)
+	return buf, nil
 }
 
 func (s *Transport) decodeChannel(v reflect.Value, b []byte) error {
@@ -49,17 +46,12 @@ func (s *Transport) decodeChannel(v reflect.Value, b []byte) error {
 		return errors.New("unexpected direction")
 	}
 
-	streamID, readN := binary.Uvarint(b[1:])
-	if readN > 4 {
-		return errors.New("read unexpected stream id size")
+	referenceID := binary.BigEndian.Uint64(b[1:])
+	c := s.getChannel(referenceID)
+	if c == nil {
+		return errors.New("channel does not exist")
 	}
-	stream := s.conn.FindStream(uint32(streamID))
-	if stream == nil {
-		return errors.New("stream does not exist")
-	}
-	rc.session = s
-	rc.stream = stream
-	v.Set(reflect.ValueOf(rc))
+	v.Set(reflect.ValueOf(*c))
 
 	return nil
 }
