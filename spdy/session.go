@@ -120,6 +120,7 @@ func (s *Transport) newStreamHandler(stream *spdystream.Stream) {
 			s.byteStreamC.Broadcast()
 			s.byteStreamC.L.Unlock()
 
+			returnHeaders.Set("status", "200")
 		} else {
 			parentID, parseErr := strconv.ParseUint(parentIDString, 10, 64)
 			if parseErr != nil {
@@ -141,6 +142,8 @@ func (s *Transport) newStreamHandler(stream *spdystream.Stream) {
 					c.direction = inbound
 					s.receiverChan <- c
 				}
+
+				returnHeaders.Set("status", "200")
 			}
 		}
 	}
