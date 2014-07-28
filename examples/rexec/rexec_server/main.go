@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -26,11 +27,35 @@ type CommandResponse struct {
 }
 
 func main() {
-	listener, err := net.Listen("tcp", "localhost:9323")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(2)
+	cert := os.Getenv("TLS_CERT")
+	key := os.Getenv("TLS_KEY")
+
+	var listener net.Listener
+	if cert != "" && key != "" {
+		tlsCert, err := tls.LoadX509KeyPair(cert, key)
+		if err != nil {
+
+		}
+
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+			Certificates:       []tls.Certificate{tlsCert},
+		}
+
+		listener, err = tls.Listen("tcp", "localhost:9323", tlsConfig)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
+	} else {
+		var err error
+		listener, err = net.Listen("tcp", "localhost:9323")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(2)
+		}
 	}
+
 	tl, err := spdy.NewTransportListener(listener, spdy.NoAuthenticator)
 	if err != nil {
 		fmt.Println(err)

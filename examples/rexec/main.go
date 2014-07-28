@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -29,11 +30,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	client, err := net.Dial("tcp", "127.0.0.1:9323")
+	var client net.Conn
+	var err error
+	tlsSkip := os.Getenv("TLS_SKIP")
+	if tlsSkip == "" {
+		client, err = tls.Dial("tcp", "127.0.0.1:9323", &tls.Config{InsecureSkipVerify: true})
+	} else {
+		client, err = net.Dial("tcp", "127.0.0.1:9323")
+	}
 	if err != nil {
 		fmt.Print(err)
 		os.Exit(2)
 	}
+
 	transport, err := spdy.NewClientTransport(client)
 	if err != nil {
 		fmt.Print(err)
