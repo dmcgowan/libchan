@@ -32,6 +32,27 @@ func (c *channel) copyValue(v interface{}) (interface{}, error) {
 			}
 			return c.copySender(val)
 		}
+	case libchan.SendChannelBinder:
+		recv, send, err := c.CreateNestedReceiver()
+		if err != nil {
+			return nil, err
+		}
+		err = val.Bind(send, recv)
+		if err != nil {
+			send.Close()
+			return nil, err
+		}
+		return send, nil
+	case libchan.ReceiveChannelBinder:
+		send, recv, err := c.CreateNestedSender()
+		if err != nil {
+			return nil, err
+		}
+		err = val.Bind(recv, send)
+		if err != nil {
+			return nil, err
+		}
+		return recv, nil
 	case *net.TCPConn:
 		// Do nothing until socket support is added
 	case *net.UDPConn:

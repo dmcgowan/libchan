@@ -11,7 +11,7 @@ import (
 	"github.com/dmcgowan/go/codec"
 )
 
-// Pipe returns an inmemory Sender/Receiver pair.
+// Pipe returns an inmemory top-level channel.
 func Pipe() (Receiver, Sender) {
 	session := createStreamSession()
 	return session.createPipe()
@@ -298,6 +298,27 @@ func (w *pipeSender) copyValue(v interface{}) (interface{}, error) {
 		if val.session != w.session {
 			return w.copyReceiver(val)
 		}
+	case SendChannelBinder:
+		send, recv, err := w.CreateNestedSender()
+		if err != nil {
+			return nil, err
+		}
+		err = val.Bind(send, recv)
+		if err != nil {
+			send.Close()
+			return nil, err
+		}
+		return send, nil
+	case ReceiveChannelBinder:
+		recv, send, err := w.CreateNestedReceiver()
+		if err != nil {
+			return nil, err
+		}
+		err = val.Bind(recv, send)
+		if err != nil {
+			return nil, err
+		}
+		return recv, nil
 	case io.ReadWriteCloser:
 		return w.copyByteStream(val)
 	case Sender:
