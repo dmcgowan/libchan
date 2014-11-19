@@ -14,14 +14,18 @@ import (
 type RemoteCommand struct {
 	Cmd        string
 	Args       []string
-	Stdin      io.Writer
-	Stdout     io.Reader
-	Stderr     io.Reader
+	Stdin      io.Reader
+	Stdout     io.WriteCloser
+	Stderr     io.WriteCloser
 	StatusChan libchan.Sender
 }
 
 type CommandResponse struct {
 	Status int
+}
+
+type writeCloserOnly struct {
+	io.WriteCloser
 }
 
 func main() {
@@ -55,8 +59,8 @@ func main() {
 		Cmd:        os.Args[1],
 		Args:       os.Args[2:],
 		Stdin:      os.Stdin,
-		Stdout:     os.Stdout,
-		Stderr:     os.Stderr,
+		Stdout:     &writeCloserOnly{os.Stdout},
+		Stderr:     &writeCloserOnly{os.Stderr},
 		StatusChan: remoteSender,
 	}
 
