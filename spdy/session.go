@@ -1,6 +1,7 @@
 package spdy
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net"
@@ -8,7 +9,7 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/dmcgowan/go/codec"
+	"github.com/dmcgowan/msgpack"
 	"github.com/docker/libchan"
 	"github.com/docker/spdystream"
 )
@@ -29,8 +30,7 @@ var (
 // Transport is a transport session on top of a network
 // connection using spdy.
 type Transport struct {
-	conn    *spdystream.Connection
-	handler codec.Handle
+	conn *spdystream.Connection
 
 	receiverChan chan *channel
 	channelC     *sync.Cond
@@ -94,7 +94,6 @@ func newSession(conn net.Conn, server bool) (*Transport, error) {
 	go spdyConn.Serve(session.newStreamHandler)
 
 	session.conn = spdyConn
-	session.handler = session.initializeHandler()
 
 	return session, nil
 }
@@ -363,23 +362,21 @@ func (c *channel) Send(message interface{}) error {
 	if c.direction == inbound {
 		return ErrWrongDirection
 	}
-	mCopy, mErr := c.copyMessage(message)
-	if mErr != nil {
-		return mErr
-	}
 
-	var buf []byte
-	encoder := codec.NewEncoderBytes(&buf, c.session.handler)
-	encodeErr := encoder.Encode(mCopy)
+	buf := bytes.NewBuffer(nil)
+	encoder := msgpack.NewEncoder(buf)
+	encoder.AddExtensions(c.initializeExtensions())
+	encodeErr := encoder.Encode(message)
 	if encodeErr != nil {
 		return encodeErr
 	}
 
 	// TODO check length of buf
-	_, writeErr := c.stream.Write(buf)
+	_, writeErr := c.stream.Write(buf.Bytes())
 	if writeErr != nil {
 		return writeErr
 	}
+
 	return nil
 }
 
@@ -396,12 +393,35 @@ func (c *channel) Receive(message interface{}) error {
 		}
 		return readErr
 	}
-	decoder := codec.NewDecoderBytes(buf, c.session.handler)
+
+	decoder := msgpack.NewDecoder(bytes.NewReader(buf))
+	decoder.AddExtensions(c.initializeExtensions())
 	decodeErr := decoder.Decode(message)
 	if decodeErr != nil {
 		return decodeErr
 	}
 	return nil
+}
+
+func (c *channel) SendTo(dst libchan.Sender) (int, error) {
+	if c.direction == outbound {
+		return 0, ErrWrongDirection
+	}
+	var n int
+	for {
+		var rm msgpack.RawMessage
+		if err := c.Receive(&rm); err == io.EOF {
+			break
+		} else if err != nil {
+			return n, err
+		}
+
+		if err := dst.Send(&rm); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 // Close closes the underlying stream, causing any subsequent
