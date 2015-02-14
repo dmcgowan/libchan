@@ -171,7 +171,7 @@ func (s *Transport) getByteStream(referenceID uint64) *byteStream {
 func (s *Transport) getChannel(referenceID uint64) *channel {
 	s.channelC.L.Lock()
 	c, ok := s.channels[referenceID]
-	if !ok {
+	for i := 0; i < 10 && !ok; i++ {
 		s.channelC.Wait()
 		c, ok = s.channels[referenceID]
 	}
